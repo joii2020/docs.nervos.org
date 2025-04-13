@@ -1,0 +1,120 @@
+---
+id: rust-api-syscalls
+title: "API (Syscalls)"
+---
+
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+import Link from "@docusaurus/Link";
+import TutorialHeader from "@components/TutorialHeader";
+import ScriptTools from "./../_ScriptTools.mdx";
+
+# ckb-std syscalls
+
+> CKB VM syscalls are used to implement communications between the RISC-V based CKB VM, and the main CKB process, allowing scripts running in the VM to read current transaction information as well as general blockchain information from CKB. Leveraging syscalls instead of custom instructions allow us to maintain a standard compliant RISC-V implementation which can embrace the broadest industrial support.
+
+引自 [CKB RFC vm-syscalls](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0009-vm-syscalls/0009-vm-syscalls.md)
+
+开发合约，必然会使用到这些指令。如果 Rust 直接使用这些指令，则就像下面这样：
+
+```rust
+let c_str = b"hello world\0";
+core::arch::asm!(
+    "ecall",
+    inout("a0") _a0,
+    in("a1") 0,
+    in("a2") 0,
+    in("a3") 0,
+    in("a4") 0,
+    in("a5") 0,
+    in("a6") 0,
+    in("a7") 2177, // const SYS_DEBUG: u64 = 2177;
+);
+```
+
+好在 ckb-std 对其进行了封装：
+
+- syscalls : 把汇编封装成基本的函数。
+- high_level : 对这些基本的函数进行进一步封装，方便开发者调用。
+
+## Native
+
+在 ckb-std 的 [native.rs](https://github.com/nervosnetwork/ckb-std/blob/master/src/syscalls/native.rs) 中提供了一套对 syscalls 进行简单封装的接口。这些接口基本符合 Rust 风格，这些接口在 RFC 中都可以找到对应指令。所以这里不再额外讲解。
+
+需要注意， 在 Rust 中返回值一般使用 `Result<usize, SysError>`。如果执行失败，则会返回 `Err(SysError)`， 而不是返回一个非零的值。
+并且 `SysError` 并不支持转换为 u8, 所以在最终返回时需要会与 C 语言的有所区别。
+
+## high_level::load_tx_hash
+
+Load [Transaction](https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0022-transaction-structure/0022-transaction-structure.md) Hash.
+
+### Syntax
+
+```rust
+pub fn load_tx_hash() -> Result<[u8; 32], SysError>
+```
+
+### Parameters
+
+None
+
+### Return
+
+If the function succeeds, 返回一个固定长度为 32 字节的哈希数组。
+
+If the function fails, return SysError.
+
+### Remarks
+
+获取交易信息的哈希（不包括 Witnesses 部分）。
+由于交易中的某些信息是一次性的（例如 Input 里面的 Cell，在交易成功后会被消耗），因此 tx-hash 是唯一的。
+
+在某些场景下可以利用这一特性，比如 CKB 默认的 Lock Script：Secp256k1，在 unlock 时，验签的消息（message）中就包含了交易哈希（tx_hash）。
+
+### Example
+
+示例：参考 `rust-script-examples/tx-hash`。 获取 `tx_hash`，并在 witness 中传入该交易的哈希，再进行校验。
+
+:::note
+在测试中可以人为修改 tx_hash ， 通常仅用于模拟极端测试场景。
+:::
+
+## high_level::load_script_hash
+
+Load script hash
+
+### Syntax
+
+```rust
+pub fn load_script_hash() -> Result<[u8; 32], SysError>
+```
+
+### Parameters
+
+None
+
+### Return
+
+If the function succeeds, 返回一个固定长度为 32 字节的哈希数组。
+
+If the function fails, return SysError.
+
+### Remarks
+
+加载当前脚本的 Script Hash。 （注意，这里是 Script Hash， 而不是 Code Hash）
+
+## high_level::load_cell
+
+Load cell
+
+### Syntax
+
+```rust
+pub fn load_cell(index: usize, source: Source) -> Result<CellOutput, SysError>
+```
+
+### Parameters
+
+index:
+
+### Return
