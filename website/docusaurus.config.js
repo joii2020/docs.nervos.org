@@ -13,7 +13,6 @@ const config = {
   baseUrl: "/",
   organizationName: "nervosnetwork",
   projectName: "docs-new",
-  scripts: ["/js/extra.js", "/js/scrollSidebar.js"],
   stylesheets: [
     {
       href: "https://cdn.jsdelivr.net/npm/katex@0.13.24/dist/katex.min.css",
@@ -88,7 +87,7 @@ const config = {
           // editUrl: 'https://github.com/facebook/docusaurus/edit/main/website/',
           // Advanced use-case: functional editUrl
           editUrl: ({ locale, blogDirPath, blogPath, permalink }) =>
-            `https://github.com/facebook/docusaurus/edit/main/website/${blogDirPath}/${blogPath}`,
+            `https://github.com/nervosnetwork/docs-new/tree/develop/website/${blogDirPath}/${blogPath}`,
           editLocalizedFiles: false,
           blogTitle: "Nervos Blog",
           blogDescription: "Blog Posts About Nervos Blockchain",
@@ -150,7 +149,7 @@ const config = {
           },
           {
             from: "/docs/reference/rpc/",
-            to: "/docs/node/rpcs",
+            to: "/docs/dapp/rpcs",
           },
           {
             from: "/docs/reference/tools",
@@ -190,6 +189,18 @@ const config = {
           {
             from: "/docs/basics/tools",
             to: "https://docs-old.nervos.org/docs/basics/tools",
+          },
+          {
+            from: "/docs/script/minimal-script",
+            to: "/docs/script/rust/rust-example-minimal-script",
+          },
+          {
+            from: "/docs/script/sudt-script",
+            to: "/docs/script/rust/rust-example-sudt-script",
+          },
+          {
+            from: "/docs/script/spawn-script",
+            to: "/docs/script/rust/rust-example-spawn-script",
           },
         ],
         createRedirects(existingPath) {
@@ -241,10 +252,35 @@ const config = {
       items: [
         {
           to: "/docs/getting-started/how-ckb-works",
-          label: "Docs",
+          label: "Getting Started",
           position: "left",
-        }, // or position: 'right'
-        { to: "blog", label: "Blog", position: "left" }, // or position: 'right'
+          activeBaseRegex:
+            "/(getting-started|how-tos|serialization|integrate-wallets|dapp|sdk-and-devtool)/",
+        },
+        {
+          to: "/docs/script/intro-to-script",
+          label: "Scripts (Smart Contracts)",
+          position: "left",
+          activeBaseRegex: "/(script|common-scripts|script-course)/",
+        },
+        {
+          to: "/docs/tech-explanation/nervos-blockchain",
+          label: "Tech Explanation",
+          position: "left",
+          activeBaseRegex: "/(tech-explanation)/",
+        },
+        {
+          to: "/docs/node/node-overview",
+          label: "Nodes & Mining",
+          position: "left",
+          activeBaseRegex: "/(node|mining)/",
+        },
+        {
+          to: "/docs/ecosystem/projects",
+          label: "Ecosystem",
+          position: "left",
+          activeBaseRegex: "/(ecosystem|history-and-hard-forks)/",
+        },
         {
           type: "search",
           position: "right",
