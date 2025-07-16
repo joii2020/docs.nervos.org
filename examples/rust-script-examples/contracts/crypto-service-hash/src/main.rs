@@ -20,7 +20,22 @@ use ckb_crypto_interface::{CkbCryptoClient, HasherType};
 use ckb_script_ipc_common::spawn::spawn_cell_server;
 use ckb_std::ckb_types::prelude::Unpack;
 
+fn ckb_hash(data: &[u8]) -> [u8; 32] {
+    const HASH_SIZE: usize = 32;
+    const CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
+    let mut hasher = blake2b_ref::Blake2bBuilder::new(HASH_SIZE)
+        .personal(CKB_HASH_PERSONALIZATION)
+        .build();
+    // hasher.update(&tx.len().to_le_bytes());
+    hasher.update(data);
+    let mut hash = [0u8; HASH_SIZE];
+    hasher.finalize(&mut hash);
+
+    hash
+}
+
 fn main() -> Result<(), i8> {
+    let bg_cycles = ckb_std::syscalls::current_cycles();
     let args: Vec<u8> = ckb_std::high_level::load_script()
         .unwrap()
         .args()
@@ -35,32 +50,70 @@ fn main() -> Result<(), i8> {
             .to_opt()
             .unwrap()
             .unpack();
+    ckb_std::debug!(
+        "load data: {}k",
+        (ckb_std::syscalls::current_cycles() - bg_cycles) / 1000
+    );
 
+    let bg_cycles = ckb_std::syscalls::current_cycles();
     let (read_pipe, write_pipe) = spawn_cell_server(
         &args[..32],
         ckb_std::ckb_types::core::ScriptHashType::Type,
         &[CString::new("").unwrap().as_ref()],
     )
     .unwrap();
+    ckb_std::debug!(
+        "spawn: {}k",
+        (ckb_std::syscalls::current_cycles() - bg_cycles) / 1000
+    );
 
+    let bg_cycles = ckb_std::syscalls::current_cycles();
     let mut crypto_cli = CkbCryptoClient::new(read_pipe, write_pipe);
+    ckb_std::debug!(
+        "new client: {}k",
+        (ckb_std::syscalls::current_cycles() - bg_cycles) / 1000
+    );
 
+    let bg_cycles = ckb_std::syscalls::current_cycles();
     let ctx = crypto_cli.hasher_new(HasherType::CkbBlake2b);
+    ckb_std::debug!(
+        "new hasher: {}k",
+        (ckb_std::syscalls::current_cycles() - bg_cycles) / 1000
+    );
+
+    let data = alloc::vec![
+        0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00,
+    ];
+
+    let bg_cycles = ckb_std::syscalls::current_cycles();
     crypto_cli
-        .hasher_update(
-            ctx.clone(),
-            alloc::vec![
-                0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00,
-            ],
-        )
+        .hasher_update(ctx.clone(), data.clone())
         .expect("update ckb blake2b");
+    ckb_std::debug!(
+        "update hash: {}k",
+        (ckb_std::syscalls::current_cycles() - bg_cycles) / 1000
+    );
+
+    let bg_cycles = ckb_std::syscalls::current_cycles();
     let hash = crypto_cli
         .hasher_finalize(ctx)
         .expect("ckb blake2b finallize");
+    ckb_std::debug!(
+        "finalize hash: {}k",
+        (ckb_std::syscalls::current_cycles() - bg_cycles) / 1000
+    );
+
+    let bg_cycles = ckb_std::syscalls::current_cycles();
+    let hash2 = ckb_hash(&data);
+    ckb_std::debug!(
+        "hash with native: {}k",
+        (ckb_std::syscalls::current_cycles() - bg_cycles) / 1000
+    );
 
     // Check
     assert_eq!(hash, witness);
+    assert_eq!(hash, hash2);
 
     Ok(())
 }

@@ -766,6 +766,7 @@ dependencies = [
 name = "crypto-service-hash"
 version = "0.1.0"
 dependencies = [
+ "blake2b-ref",
  "ckb-crypto-interface",
  "ckb-script-ipc-common",
  "ckb-std",

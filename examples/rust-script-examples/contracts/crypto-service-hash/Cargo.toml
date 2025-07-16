@@ -7,6 +7,7 @@ edition = "2021"
 ckb-std = "0.17.0"
 ckb-crypto-interface = { path = "../../crate/ckb-crypto-interface" }
 ckb-script-ipc-common = "1.0.3"
+blake2b-ref = "0.3.1"
 
 [features]
 library = []
