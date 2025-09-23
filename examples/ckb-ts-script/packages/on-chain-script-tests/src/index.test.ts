@@ -11,6 +11,8 @@ const SCRIPT_SIMPLE_PRINT_ARGS = readFileSync(
   "../../contracts/simple-print-args/dist/index.bc",
 );
 const SCRIPT_FIB = readFileSync("../../contracts/fib/dist/index.bc");
+const SCRIPT_PRINT_CRASH = readFileSync("../../contracts/print-crash/dist/index.debug.js");
+
 
 test("hello-world success", () => {
   const resource = Resource.default();
@@ -86,3 +88,29 @@ test("fib success", () => {
   const verifier = Verifier.from(resource, tx);
   verifier.verifySuccess(true);
 });
+
+// test("print-crash", () => {
+//   console.log("----aaabb");
+//   const resource = Resource.default();
+//   const tx = Transaction.default();
+//   const lockScript = createJSScript(
+//     resource,
+//     tx,
+//     hexFrom(SCRIPT_PRINT_CRASH),
+//     "0x",
+//   );
+
+//   // mock a input cell with the created script as lock script
+//   const inputCell = resource.mockCell(lockScript);
+
+//   // add input cell to the transaction
+//   tx.inputs.push(Resource.createCellInput(inputCell));
+//   // add output cell to the transaction
+//   tx.outputs.push(Resource.createCellOutput(lockScript));
+//   // add output data to the transaction
+//   tx.outputsData.push(hexFrom("0x"));
+
+//   // verify the transaction
+//   const verifier = Verifier.from(resource, tx);
+//   verifier.verifySuccess(true);
+// });
