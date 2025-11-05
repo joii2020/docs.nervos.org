@@ -1,70 +1,58 @@
-import { hexFrom, Transaction, hashTypeToBytes } from "@ckb-ccc/core";
-import { readFileSync } from "fs";
-import {
-  Resource,
-  Verifier,
-  DEFAULT_SCRIPT_ALWAYS_SUCCESS,
-  DEFAULT_SCRIPT_CKB_JS_VM,
-} from "ckb-testtool";
+import { hexFrom, Transaction, Hex, numLeToBytes } from "@ckb-ccc/core";
+import { Resource, Verifier, } from "ckb-testtool";
 
-import { onChainPorject } from "./index"
+import * as misc from "./misc"
+
+class projectArgs {
+  constructor(
+    public typeID: Hex = misc.zeroHash(),
+    public creatorLockScriptHash: Hex = misc.zeroHash(),
+    public goalAmount: bigint = BigInt(0),
+    public dealine: number = Date.now(),
+    public contributionType: Hex = misc.zeroHash(),
+  ) { }
+
+  args(): Hex {
+    return misc.joinHex(
+      this.typeID,
+      this.creatorLockScriptHash,
+      hexFrom(numLeToBytes(this.goalAmount, 16)),
+      hexFrom(numLeToBytes(this.dealine, 8)),
+      this.contributionType)
+  }
+}
 
 async function createSuccess() {
-  const resource = Resource.default();
-  const alwaysSuccessCell = resource.mockCell(
-    resource.createScriptUnused(),
-    undefined,
-    hexFrom(readFileSync(DEFAULT_SCRIPT_ALWAYS_SUCCESS)),
-  );
-  const alwaysSuccessScript = resource.createScriptByData(
-    alwaysSuccessCell,
-    "0x",
-  );
-  const jsCell = resource.mockCell(
-    resource.createScriptUnused(),
-    undefined,
-    hexFrom(readFileSync(onChainPorject)),
-  );
-  const jsScript = resource.createScriptByData(jsCell, "0x");
-  const mainCell = resource.mockCell(
-    resource.createScriptUnused(),
-    undefined,
-    hexFrom(readFileSync(DEFAULT_SCRIPT_CKB_JS_VM)),
-  );
-  const mainScript = resource.createScriptByData(
-    mainCell,
-    hexFrom(
-      "0x0000" +
-      jsScript.codeHash.slice(2) +
-      hexFrom(hashTypeToBytes(jsScript.hashType)).slice(2) +
-      "0000000000000000000000000000000000000000000000000000000000000000",
-    ),
-  );
+  let helper = new misc.txHelper();
+  // helper.debugJsCode = true;
 
-  const inputCell = resource.mockCell(
-    alwaysSuccessScript,
-    mainScript,
-    "0xFF000000000000000000000000000000",
-  );
+  const userLock = helper.createAlwaySuc("UserLock");
+  const input_0 = helper.resource.mockCell(userLock);
 
-  const tx = Transaction.from({
-    cellDeps: [
-      Resource.createCellDep(alwaysSuccessCell, "code"),
-      Resource.createCellDep(jsCell, "code"),
-      Resource.createCellDep(mainCell, "code"),
+  const prjLock = helper.createAlwaySuc("Project");
+  let prjArgs = new projectArgs();
+  const prjScript = helper.createJsScript(misc.scriptProject, prjArgs.args());
+
+  const output_0 = Resource.createCellOutput(prjLock, prjScript);
+  const output_1 = Resource.createCellOutput(userLock);
+
+  let tx = Transaction.from({
+    inputs: [
+      input_0,
     ],
-    inputs: [Resource.createCellInput(inputCell)],
     outputs: [
-      Resource.createCellOutput(alwaysSuccessScript, mainScript),
-      Resource.createCellOutput(alwaysSuccessScript, mainScript),
+      output_0,
+      output_1,
     ],
     outputsData: [
-      hexFrom("0xFE000000000000000000000000000000"),
-      hexFrom("0x01000000000000000000000000000000"),
+      hexFrom("0x"),
+      hexFrom("0x"),
     ],
   });
+  tx = helper.updateScriptDeps(tx);
+  tx = helper.setTypeID(tx, prjScript.hash(), 0, true);
 
-  const verifier = Verifier.from(resource, tx);
+  const verifier = Verifier.from(helper.resource, tx);
   verifier.verifySuccess(true);
 }
 
