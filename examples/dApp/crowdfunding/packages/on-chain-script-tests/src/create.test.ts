@@ -1,36 +1,42 @@
 import { hexFrom, Transaction, Hex, numLeToBytes } from "@ckb-ccc/core";
 import { Resource, Verifier, } from "ckb-testtool";
+import { Since } from "@ckb-ccc/core";
 
 import * as misc from "./misc"
+import { txHelper, joinHex } from "./tx_helper";
 
 class projectArgs {
   constructor(
     public typeID: Hex = misc.zeroHash(),
     public creatorLockScriptHash: Hex = misc.zeroHash(),
     public goalAmount: bigint = BigInt(0),
-    public dealine: number = Date.now(),
+    public deadline: Date = new Date(),
     public contributionType: Hex = misc.zeroHash(),
-  ) { }
+  ) {
+    // Ends after 100 days
+    this.deadline.setDate(this.deadline.getDate() + 100);
+  }
 
   args(): Hex {
-    return misc.joinHex(
+    return joinHex(
       this.typeID,
       this.creatorLockScriptHash,
       hexFrom(numLeToBytes(this.goalAmount, 16)),
-      hexFrom(numLeToBytes(this.dealine, 8)),
+      hexFrom(new Since("absolute", "timestamp", BigInt(this.deadline.getTime())).toBytes()),
       this.contributionType)
   }
 }
 
 async function createSuccess() {
-  let helper = new misc.txHelper();
-  // helper.debugJsCode = true;
+  let helper = new txHelper();
+  helper.debugJsCode = true;
 
   const userLock = helper.createAlwaySuc("UserLock");
   const input_0 = helper.resource.mockCell(userLock);
 
   const prjLock = helper.createAlwaySuc("Project");
   let prjArgs = new projectArgs();
+  prjArgs.goalAmount = 1000000n;
   const prjScript = helper.createJsScript(misc.scriptProject, prjArgs.args());
 
   const output_0 = Resource.createCellOutput(prjLock, prjScript);
@@ -49,6 +55,7 @@ async function createSuccess() {
       hexFrom("0x"),
     ],
   });
+  tx = helper.updateSince(tx);
   tx = helper.updateScriptDeps(tx);
   tx = helper.setTypeID(tx, prjScript.hash(), 0, true);
 
