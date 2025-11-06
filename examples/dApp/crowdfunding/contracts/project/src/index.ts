@@ -1,7 +1,7 @@
 import * as bindings from "@ckb-js-std/bindings";
 import { HighLevel, log, logError, numFromBytes } from "@ckb-js-std/core";
-import { Since } from "ckb-since"
-import { getScriptStatus, ScriptStatus } from "ckb-utils"
+import { Since } from "ckb-since";
+import { getScriptStatus, ScriptStatus } from "ckb-utils";
 
 class PorjectArgs {
   constructor(
@@ -45,9 +45,7 @@ function success(args: PorjectArgs) {
   console.log("Crowdfunding success");
 }
 
-function fail(args: PorjectArgs) {
-
-}
+function fail(args: PorjectArgs) {}
 
 function main() {
   log.setLevel(log.LogLevel.Debug);
@@ -67,7 +65,7 @@ function main() {
     if (status == ScriptStatus.DESTROYED) {
       fail(prjArgs);
     } else {
-      throw Error("After Deadline, it can only be destroyed.")
+      throw Error("After Deadline, it can only be destroyed.");
     }
   }
 
@@ -83,4 +81,3 @@ try {
   logError(e);
   bindings.exit(-1);
 }
-

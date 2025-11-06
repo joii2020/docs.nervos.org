@@ -1,23 +1,38 @@
-import { hexFrom, Transaction, Script, Cell, Hex, hashCkb, } from "@ckb-ccc/core";
-import * as ccc from "@ckb-ccc/core";
-import { readFileSync } from "fs";
-import {
-    Resource,
-    DEFAULT_SCRIPT_ALWAYS_SUCCESS,
-    DEFAULT_SCRIPT_CKB_JS_VM,
-} from "ckb-testtool";
-import { randomBytes } from "node:crypto";
-import * as node_path from "node:path";
+import { hexFrom, Hex, numLeToBytes } from "@ckb-ccc/core";
 
-export const scriptProject = "../../contracts/project/dist/index.bc"
-export const scriptContribution = "../../contracts/contribution/dist/index.bc"
-export const scriptClaim = "../../contracts/claim/dist/index.bc"
+import { Since } from "@ckb-ccc/core";
 
-export function zeroHash(): Hex {
-    return hexFrom("0x0000000000000000000000000000000000000000000000000000000000000000");
-}
+import { zeroHash, joinHex } from "./tx_helper";
 
-export function generateRandHash(): Hex {
-    const buf = randomBytes(32);
-    return hexFrom(buf);
+export const scriptProject = "../../contracts/project/dist/index.bc";
+export const scriptContribution = "../../contracts/contribution/dist/index.bc";
+export const scriptClaim = "../../contracts/claim/dist/index.bc";
+
+export class ProjectArgs {
+  constructor(
+    public typeID: Hex = zeroHash(),
+    public creatorLockScriptHash: Hex = zeroHash(),
+    public goalAmount: bigint = BigInt(0),
+    public deadline: Date = new Date(),
+    public contributionType: Hex = zeroHash(),
+  ) {
+    // Ends after 100 days
+    this.deadline.setDate(this.deadline.getDate() + 100);
+  }
+
+  args(): Hex {
+    return joinHex(
+      this.typeID,
+      this.creatorLockScriptHash,
+      hexFrom(numLeToBytes(this.goalAmount, 16)),
+      hexFrom(
+        new Since(
+          "absolute",
+          "timestamp",
+          BigInt(this.deadline.getTime()),
+        ).toBytes(),
+      ),
+      this.contributionType,
+    );
+  }
 }
