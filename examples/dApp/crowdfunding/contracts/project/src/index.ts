@@ -1,37 +1,8 @@
 import * as bindings from "@ckb-js-std/bindings";
-import { HighLevel, log, logError, numFromBytes } from "@ckb-js-std/core";
+import { HighLevel, log, logError, numFromBytes, bytesEq } from "@ckb-js-std/core";
 import { Since } from "ckb-since";
-import { getScriptStatus, ScriptStatus } from "ckb-utils";
-
-class PorjectArgs {
-  constructor(
-    public typeId: Uint8Array = new Uint8Array(),
-    public creatorLockScriptHash: Uint8Array = new Uint8Array(),
-    public goalAmount: bigint = 0n,
-    public deadline: Since = new Since(0n),
-    public contributionType: Uint8Array = new Uint8Array(),
-  ) {
-    let args = HighLevel.loadScript().args.slice(35);
-    this.typeId = new Uint8Array(args.slice(0, 32));
-    this.creatorLockScriptHash = new Uint8Array(args.slice(32, 64));
-    this.goalAmount = numFromBytes(args.slice(64, 80));
-    this.deadline = new Since(numFromBytes(args.slice(80, 88)));
-    this.contributionType = new Uint8Array(args.slice(88, 120));
-  }
-}
-
-// const to0x = (x: bigint) => (x < 0n ? "-0x" + (-x).toString(16) : "0x" + x.toString(16));
-
-function checkDeadline(deadline: Since): boolean {
-  const since = new Since(HighLevel.loadInputSince(0, bindings.SOURCE_INPUT));
-  let ording = deadline.cmp(since);
-  if (ording == null) {
-    throw Error("deadline and since types do not match");
-  }
-  console.log(`ording: ${ording}`);
-
-  return ording === 1;
-}
+import * as utils from "utils";
+import { PorjectArgs, ScriptStatus } from "utils";
 
 function create(args: PorjectArgs) {
   console.log("Create crowdfunding");
@@ -43,27 +14,86 @@ function create(args: PorjectArgs) {
 
 function success(args: PorjectArgs) {
   console.log("Crowdfunding success");
+
+  let totalCapacity = 0n;
+
+  let thisScriptHash = HighLevel.loadScriptHash();
+  let iters = new HighLevel.QueryIter(HighLevel.loadCellLock, bindings.SOURCE_INPUT);
+  for (let index = 0; index < utils.MAX_CELLS; index++) {
+    const it = iters.next();
+    if (it.done)
+      break;
+
+    // Not Contribution (Code Hash)
+    if (!bytesEq(new utils.JsVMArgs(it.value.args).jsScript, args.contributionScript))
+      continue;
+    let contributionArgs = new utils.ContributionArgs(it.value.args);
+    if (!bytesEq(thisScriptHash, contributionArgs.projectScriptHash))
+      continue;
+    if (!contributionArgs.deadline.eq(args.deadline))
+      continue;
+    const typeScriptHash = HighLevel.loadCellTypeHash(index, bindings.SOURCE_INPUT);
+    if (!utils.optionBytesEq(typeScriptHash, args.contributionType)) {
+      throw Error(`Contribution Cell Type error, index: ${index}`);
+    }
+
+    totalCapacity += HighLevel.loadCellCapacity(index, bindings.SOURCE_INPUT);
+  }
+
+  if (args.goalAmount > totalCapacity) {
+    throw Error(`Not enough funds raised, need: ${args.goalAmount}, actual: ${totalCapacity}`);
+  }
+
+  let outputIters = new HighLevel.QueryIter(HighLevel.loadCellLockHash, bindings.SOURCE_OUTPUT);
+  for (let index = 0; index < utils.MAX_CELLS; index++) {
+    const it = outputIters.next();
+    if (it.done) {
+      break;
+    }
+    if (!bytesEq(it.value, args.creatorLockScriptHash)) {
+      continue;
+    }
+
+    let capacity = HighLevel.loadCellCapacity(index, bindings.SOURCE_OUTPUT);
+    if (capacity != totalCapacity) {
+      continue;
+    }
+    return;
+  }
+  throw Error("After success, the funds need to be transferred to the designated account");
 }
 
-function fail(args: PorjectArgs) {}
+function fail(args: PorjectArgs) {
+  // not on output
+
+  let thisScriptHash = HighLevel.loadScriptHash();
+
+  for (let it of new HighLevel.QueryIter(HighLevel.loadCellTypeHash, bindings.SOURCE_OUTPUT)) {
+    if (utils.optionBytesEq(it, thisScriptHash)) {
+      throw Error("After expiration, only the Project Cell can be destroyed");
+    }
+  }
+}
 
 function main() {
   log.setLevel(log.LogLevel.Debug);
-  HighLevel.checkTypeId(35);
-  const status = getScriptStatus();
+  console.log("Project Script");
 
-  let prjArgs = new PorjectArgs();
-  if (checkDeadline(prjArgs.deadline)) {
+  HighLevel.checkTypeId(35);
+  const status = utils.getScriptStatus();
+  let args = new PorjectArgs();
+
+  if (utils.checkDeadline(args.deadline)) {
     if (status == ScriptStatus.CREATED) {
-      create(prjArgs);
+      create(args);
     } else if (status == ScriptStatus.DESTROYED) {
-      success(prjArgs);
+      success(args);
     } else {
       throw Error("Project does not allow transactions ");
     }
   } else {
     if (status == ScriptStatus.DESTROYED) {
-      fail(prjArgs);
+      fail(args);
     } else {
       throw Error("After Deadline, it can only be destroyed.");
     }

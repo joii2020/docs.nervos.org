@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "ckb-since": "workspace:*",
+    "utils": "workspace:*",
     "@ckb-js-std/bindings": "~1.0.0",
     "@ckb-js-std/core": "~1.0.1",
     "@ckb-js-std/eslint-plugin": "~1.0.0",

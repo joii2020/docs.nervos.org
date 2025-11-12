@@ -6,7 +6,6 @@ import { TxHelper } from "./tx_helper";
 
 async function createSuccess() {
   let helper = new TxHelper();
-  helper.debugJsCode = true;
 
   const userLock = helper.createAlwaySuc("UserLock");
   const input_0 = helper.resource.mockCell(userLock);
@@ -14,7 +13,7 @@ async function createSuccess() {
   const prjLock = helper.createAlwaySuc("Project");
   let prjArgs = new misc.ProjectArgs();
   prjArgs.goalAmount = 1000000n;
-  const prjScript = helper.createJsScript(misc.scriptProject, prjArgs.args());
+  const prjScript = helper.createJsScript(misc.scriptProject, prjArgs.toBytes());
 
   const output_0 = Resource.createCellOutput(prjLock, prjScript);
   const output_1 = Resource.createCellOutput(userLock);
@@ -24,7 +23,7 @@ async function createSuccess() {
     outputs: [output_0, output_1],
     outputsData: [hexFrom("0x"), hexFrom("0x")],
   });
-  tx = helper.updateSince(tx);
+  tx = TxHelper.updateSince(tx);
   tx = helper.updateScriptDeps(tx);
   tx = helper.setTypeID(tx, prjScript.hash(), 0, true);
 

@@ -5,6 +5,7 @@ import {
   Cell,
   Hex,
   hashCkb,
+  hashTypeToBytes,
 } from "@ckb-ccc/core";
 import * as ccc from "@ckb-ccc/core";
 import { readFileSync } from "fs";
@@ -16,22 +17,31 @@ import {
 import { randomBytes } from "node:crypto";
 import * as node_path from "node:path";
 
+const DEBUG_JS_CODE = false;
+
 export class TxHelper {
   constructor(
-    public debugJsCode: boolean = false,
+    public debugJsCode: boolean = DEBUG_JS_CODE,
     public resource: Resource = Resource.default(),
     private jsCode: Map<string, Cell> = new Map(),
     private alwaySucArgs: Map<string, Hex> = new Map(),
-  ) {}
+  ) { }
 
   appendCell(path: string): Cell {
-    const data = hexFrom(readFileSync(path));
-
-    for (let [_, cell] of this.resource.cells) {
-      if (cell.outputData == data) {
-        return cell;
+    if (this.debugJsCode) {
+      const { dir, name, ext } = node_path.parse(path);
+      if (ext.toLowerCase() == ".bc") {
+        path = node_path.join(dir, `${name}.debug.js`);
+      } else {
+        // throw `Unknow js script: ${path}`;
       }
     }
+
+    const data = hexFrom(readFileSync(path));
+
+    for (let cell of this.resource.cells.values())
+      if (cell.outputData == data)
+        return cell;
 
     if (this.debugJsCode) {
       return this.resource.mockDebugCellAsCellDep(path);
@@ -50,15 +60,6 @@ export class TxHelper {
   }
 
   createJsScript(path: string, args: Hex = "0x"): Script {
-    if (this.debugJsCode) {
-      const { dir, name, ext } = node_path.parse(path);
-      if (ext.toLowerCase() == ".bc") {
-        path = node_path.join(dir, `${name}.debug.js`);
-      } else {
-        throw `Unknow js script: ${path}`;
-      }
-    }
-
     const jsCodeCell = this.appendCell(path);
     const jsCodeHash = hashCkb(jsCodeCell.outputData);
     this.jsCode.set(path, jsCodeCell);
@@ -69,6 +70,7 @@ export class TxHelper {
       hexFrom(ccc.hashTypeToBytes("data2")),
       args,
     );
+
     return this.createScript(DEFAULT_SCRIPT_CKB_JS_VM, scriptArgs);
   }
 
@@ -88,7 +90,7 @@ export class TxHelper {
 
   getCell(script: Script): Cell {
     let codeHash = script.codeHash;
-    for (let [_, cell] of this.resource.cells) {
+    for (let cell of this.resource.cells.values()) {
       if (script.hashType == "type") {
         let hash = cell.cellOutput.type?.hash();
         if (hash == codeHash) {
@@ -114,16 +116,18 @@ export class TxHelper {
     return cell;
   }
 
+  getJsScript(path: string): Hex | undefined {
+    let it = this.jsCode.get(path);
+    if (it == undefined) {
+      return undefined;
+    }
+    return joinHex(
+      hashCkb(it.outputData),
+      hexFrom(hashTypeToBytes("data2")));
+  }
+
   updateScriptDeps(tx: Transaction): Transaction {
     let deps: Map<Hex, ccc.CellDep> = new Map();
-    for (let dep of tx.cellDeps) {
-      let cell = this.resource.cells.get(dep.outPoint.toBytes().toString());
-      if (cell == undefined) {
-        throw "Unknow input cell";
-      }
-      deps.set(hashCkb(cell?.outputData), dep);
-    }
-
     for (let it of tx.inputs) {
       let cell = this.getCellByInput(it);
 
@@ -156,26 +160,25 @@ export class TxHelper {
       }
     }
 
-    for (let [_, cell] of this.jsCode) {
+    for (let [path, cell] of this.jsCode) {
       let dataHash = hashCkb(cell.outputData);
       if (deps.get(dataHash) == undefined) {
         deps.set(dataHash, Resource.createCellDep(cell, "code"));
       }
     }
 
-    for (let [_, d] of deps) {
-      tx.addCellDeps(d);
-    }
+    tx.addCellDeps(Array.from(deps.values()));
 
     return tx;
   }
 
-  updateSince(tx: Transaction): Transaction {
+  static updateSince(tx: Transaction): Transaction {
+    let now = Date.now();
     for (let i = 0; i < tx.inputs.length; i++) {
       tx.inputs[i].since = new ccc.Since(
         "absolute",
         "timestamp",
-        BigInt(Date.now()),
+        BigInt(now),
       ).toNum();
     }
     return tx;
@@ -203,8 +206,7 @@ export class TxHelper {
     }
 
     for (let index = 0; index < tx.outputs.length; index++) {
-      let cell = tx.outputs[index];
-      let typeScript = cell.type;
+      const typeScript = tx.outputs[index].type;
       if (typeScript == undefined || typeScript.hash() != scriptHash) {
         continue;
       }
@@ -222,20 +224,36 @@ export class TxHelper {
 
     return tx;
   }
+
+  printTx(tx: Transaction) {
+    let cells = [];
+    for (const [outPoint, cell] of this.resource.cells) {
+      let oc = cell.clone();
+      oc.outputData = "0x...";
+
+      cells.push({
+        outPoint: outPoint,
+        dataHash: hexFrom(hashCkb(cell.outputData)),
+        cell: oc
+      });
+    }
+
+    const cells_str = ccc.stringify(cells);
+    const tx_str = ccc.stringify(tx);
+
+    console.log(`tx info: \n${cells_str}\n\n${tx_str}`)
+  }
 }
 
 export function joinHex(a: Hex, b: Hex, ...rest: Hex[]): Hex {
   let result = a + b.slice(2);
-  for (const h of rest) result += h.slice(2);
+  for (const h of rest)
+    result += h.slice(2);
   return hexFrom(result);
 }
 
 export function zeroHash(): Hex {
-  const buf = new Uint8Array(32);
-  console.log(buf);
-  return hexFrom(
-    "0x0000000000000000000000000000000000000000000000000000000000000000",
-  );
+  return hexFrom(new Uint8Array(32));
 }
 
 export function generateRandHash(): Hex {
